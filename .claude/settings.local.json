@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(supabase functions *)",
+      "Bash(node -e ' *)",
+      "Bash(kill 54193)"
+    ]
+  }
+}
