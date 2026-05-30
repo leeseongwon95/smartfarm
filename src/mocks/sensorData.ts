@@ -4,10 +4,12 @@ function rand(min: number, max: number, decimals = 1) {
   return parseFloat((Math.random() * (max - min) + min).toFixed(decimals))
 }
 
-function generateTimeSeries(zone: string, hours = 24): SensorData[] {
+function generateTimeSeries(zone: string): SensorData[] {
   const now = new Date()
-  return Array.from({ length: hours }, (_, i) => {
-    const ts = new Date(now.getTime() - (hours - 1 - i) * 60 * 60 * 1000)
+  const INTERVAL_MIN = 10
+  const TOTAL_POINTS = 24 * 60 / INTERVAL_MIN // 144개
+  return Array.from({ length: TOTAL_POINTS }, (_, i) => {
+    const ts = new Date(now.getTime() - (TOTAL_POINTS - 1 - i) * INTERVAL_MIN * 60 * 1000)
     return {
       id: `${zone}-${i}`,
       zone,
@@ -82,7 +84,7 @@ export const mockAlerts: Alert[] = [
 
 export const defaultThresholds: ThresholdConfig = {
   temperature: { min: 10, max: 40, warningMin: 15, warningMax: 32, enabled: true },
-  humidity:    { min: 30, max: 100, warningMin: 50, warningMax: 90, enabled: true },
+  humidity:    { min: 30, max: 90,  warningMin: 40, warningMax: 80, enabled: true },
   co2:         { min: 300, max: 2000, warningMin: 400, warningMax: 1000, enabled: true },
   light:       { min: 0, max: 120000, warningMin: 5000, warningMax: 90000, enabled: true },
   soilMoisture:{ min: 10, max: 100, warningMin: 30, warningMax: 80, enabled: true },

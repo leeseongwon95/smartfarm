@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSensorLatest, useSensorTimeSeries, useAlerts, useThresholds } from '@/hooks/useSensorData'
 import { useSensorSimulator } from '@/hooks/useSensorSimulator'
+import { useLiveSensor } from '@/hooks/useLiveSensor'
 import { SensorCard } from '@/components/dashboard/SensorCard'
 import { SensorChart } from '@/components/dashboard/SensorChart'
 import { AlertList } from '@/components/dashboard/AlertList'
@@ -35,11 +36,14 @@ export function Dashboard() {
   const [selectedZone, setSelectedZone] = useState<string>(ZONES[0])
   useSensorSimulator()
   const { data: latestAll } = useSensorLatest()
+  const liveAll = useLiveSensor(latestAll)
   const { data: timeSeries } = useSensorTimeSeries(selectedZone)
   const { data: alerts } = useAlerts()
   const { data: thresholds } = useThresholds()
 
-  const latestForZone = latestAll?.find((d) => d.zone === selectedZone)
+  const latestForZone = liveAll.length
+    ? liveAll.find((d) => d.zone === selectedZone)
+    : latestAll?.find((d) => d.zone === selectedZone)
 
   const lastUpdated = latestForZone
     ? new Date(latestForZone.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -123,7 +127,7 @@ export function Dashboard() {
         <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">구역별 현황</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {ZONES.map((zone) => {
-            const data = latestAll?.find((d) => d.zone === zone)
+            const data = (liveAll.length ? liveAll : latestAll ?? []).find((d) => d.zone === zone)
             const level = data && thresholds ? getZoneWorstLevel(data, thresholds) : 'normal'
             const ls = zoneLevelStyle[level]
             return (

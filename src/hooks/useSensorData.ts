@@ -31,10 +31,11 @@ export const useSensorTimeSeries = (zone: string) =>
         .eq('zone', zone)
         .gte('timestamp', since)
         .order('timestamp', { ascending: true })
+        .limit(48)
       if (error) throw error
       return (data ?? []).map(rowToSensorData)
     },
-    refetchInterval: 5000,
+    refetchInterval: 30 * 60 * 1000, // 차트는 30분마다 갱신
   })
 
 // ---------- 전체 구역 최신값 ----------

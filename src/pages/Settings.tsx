@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useThresholds, useSaveThresholds } from '@/hooks/useSensorData'
+import { showToast } from '@/components/ui/toast'
 import { supabase } from '@/lib/supabase'
 import { SENSOR_META, ZONES } from '@/types/sensor'
 import type { SensorKey, SensorThreshold, ThresholdConfig } from '@/types/sensor'
@@ -224,7 +225,6 @@ export function Settings() {
   const { data: savedThresholds } = useThresholds()
   const [config, setConfig] = useState<ThresholdConfig | null>(null)
   const [allRaw, setAllRaw] = useState<AllRaw | null>(null)
-  const [status, setStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle')
   const saveThresholds = useSaveThresholds()
   const queryClient = useQueryClient()
 
@@ -233,7 +233,6 @@ export function Settings() {
   const effectiveRaw = allRaw ?? (savedThresholds ? configToAllRaw(savedThresholds) : null)
 
   function updateConfig(key: SensorKey, t: SensorThreshold) {
-    setStatus('idle')
     setConfig((prev) => ({ ...(prev ?? savedThresholds!), [key]: t }))
   }
 
@@ -275,35 +274,64 @@ export function Settings() {
     handleCommit(key, field, final)
   }
 
-  async function handleSave() {
-    if (!effectiveConfig) return
-    const config = effectiveConfig
-    setStatus('saving')
+  const [savingKeys, setSavingKeys] = useState<Set<SensorKey>>(new Set())
+  const [savingAll, setSavingAll] = useState(false)
+
+  const saveOne = useCallback(async (key: SensorKey) => {
+    if (!effectiveConfig || !savedThresholds) return
+    setSavingKeys((s) => new Set(s).add(key))
     try {
-      await saveThresholds.mutateAsync(config)
-      await reEvaluateAlerts(config)
+      const partial = { ...savedThresholds, [key]: effectiveConfig[key] }
+      await saveThresholds.mutateAsync(partial)
+      await reEvaluateAlerts(partial)
+      queryClient.invalidateQueries({ queryKey: ['alerts'] })
+      showToast(`${SENSOR_META[key].label} 저장됨`)
+    } catch {
+      showToast(`${SENSOR_META[key].label} 저장 실패`, 'error')
+    } finally {
+      setSavingKeys((s) => { const n = new Set(s); n.delete(key); return n })
+    }
+  }, [effectiveConfig, savedThresholds, saveThresholds, queryClient])
+
+  async function handleSaveAll() {
+    if (!effectiveConfig) return
+    setSavingAll(true)
+    try {
+      await saveThresholds.mutateAsync(effectiveConfig)
+      await reEvaluateAlerts(effectiveConfig)
       queryClient.invalidateQueries({ queryKey: ['alerts'] })
       queryClient.invalidateQueries({ queryKey: ['sensor'] })
-      setStatus('done')
-      setTimeout(() => setStatus('idle'), 2500)
+      showToast('전체 임계값 저장됨')
     } catch {
-      setStatus('error')
+      showToast('저장 실패', 'error')
+    } finally {
+      setSavingAll(false)
     }
   }
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <h1 className="text-2xl font-bold">설정</h1>
+      {/* 상단 고정 전체 저장 바 */}
+      <div className="sticky top-0 z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur border-b flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold">설정</h1>
+          <p className="text-xs text-muted-foreground">센서별 저장 또는 전체 일괄 저장</p>
+        </div>
+        <Button onClick={handleSaveAll} disabled={savingAll}>
+          {savingAll ? '저장 중...' : '전체 저장'}
+        </Button>
+      </div>
 
       <Card>
         <CardHeader>
           <CardTitle>센서 임계값 설정</CardTitle>
-          <CardDescription>슬라이더로 경고/위험 범위를 조정하고 저장하면 알람이 즉시 재평가됩니다.</CardDescription>
+          <CardDescription>슬라이더로 경고/위험 범위를 조정하고 센서별로 바로 저장할 수 있습니다.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {effectiveConfig && effectiveRaw && SENSOR_KEYS.map((key) => {
             const meta = SENSOR_META[key]
             const t = effectiveConfig[key]
+            const saving = savingKeys.has(key)
             return (
               <div key={key} className="pb-6 border-b last:border-0">
                 <div className="flex items-center justify-between mb-3">
@@ -312,9 +340,19 @@ export function Settings() {
                     <span className="font-semibold text-sm">{meta.label}</span>
                     {meta.unit && <span className="text-xs text-muted-foreground">({meta.unit})</span>}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{t.enabled ? '알람 활성' : '알람 꺼짐'}</span>
-                    <Toggle checked={t.enabled} onChange={(v) => handleToggle(key, v)} />
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{t.enabled ? '알람 활성' : '알람 꺼짐'}</span>
+                      <Toggle checked={t.enabled} onChange={(v) => handleToggle(key, v)} />
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="h-7 text-xs px-3"
+                      disabled={saving}
+                      onClick={() => saveOne(key)}
+                    >
+                      {saving ? '저장 중...' : '저장'}
+                    </Button>
                   </div>
                 </div>
                 <ThresholdSlider
@@ -328,14 +366,6 @@ export function Settings() {
               </div>
             )
           })}
-
-          <div className="flex items-center gap-3 pt-2">
-            <Button onClick={handleSave} disabled={status === 'saving'}>
-              {status === 'saving' ? '저장 중...' : '저장'}
-            </Button>
-            {status === 'done'  && <Badge variant="normal">저장 완료 · 알람 재평가됨</Badge>}
-            {status === 'error' && <Badge variant="danger">저장 실패</Badge>}
-          </div>
         </CardContent>
       </Card>
 

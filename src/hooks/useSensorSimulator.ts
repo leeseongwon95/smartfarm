@@ -5,7 +5,7 @@ import { defaultThresholds } from '@/mocks/sensorData'
 import { ZONES } from '@/types/sensor'
 import type { ThresholdConfig } from '@/types/sensor'
 
-const INTERVAL_MS = 30_000
+const INTERVAL_MS = 30 * 60 * 1000 // 30분
 
 const SENSOR_LABEL: Record<string, string> = {
   temperature: '온도', humidity: '습도', co2: 'CO₂',

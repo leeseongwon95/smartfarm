@@ -6,6 +6,7 @@ import { History } from '@/pages/History'
 import { Settings } from '@/pages/Settings'
 import { Login } from '@/pages/Login'
 import { useAuth } from '@/hooks/useAuth'
+import { Toaster } from '@/components/ui/toast'
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -54,6 +55,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthGate />
+        <Toaster />
       </BrowserRouter>
     </QueryClientProvider>
   )
